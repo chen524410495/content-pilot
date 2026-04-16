@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ContentPilot - 多平台内容发布工具</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <header class="header">
+            <h1>🚀 ContentPilot</h1>
+            <p class="subtitle">AI驱动的一键发布工具 | 支持知乎、掘金、CSDN</p>
+        </header>
+
+        <!-- Flash消息 -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- 平台状态 -->
+        <section class="section">
+            <h2>📡 平台状态</h2>
+            <div class="platform-grid">
+                {% for platform in platforms %}
+                <div class="platform-card {{ 'authenticated' if platform.authenticated else 'not-authenticated' }}">
+                    <div class="platform-header">
+                        <span class="platform-name">{{ platform.display_name }}</span>
+                        <span class="status-badge {{ 'online' if platform.authenticated else 'offline' }}">
+                            {{ '已连接' if platform.authenticated else '未连接' }}
+                        </span>
+                    </div>
+                    {% if platform.authenticated %}
+                        <a href="/api/platforms/status" class="btn-small">查看详情</a>
+                    {% else %}
+                        <a href="/auth/{{ platform.name }}" class="btn-small btn-primary">授权</a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <!-- AI写作助手 -->
+        {% if ai_enabled %}
+        <section class="section">
+            <h2>🤖 AI写作助手</h2>
+            <div class="ai-panel">
+                <div class="ai-form">
+                    <div class="form-group">
+                        <label for="ai-topic">文章主题</label>
+                        <input type="text" id="ai-topic" placeholder="例如：Python异步编程详解">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="ai-style">文章风格</label>
+                            <select id="ai-style">
+                                <option value="技术教程">技术教程</option>
+                                <option value="科普">科普</option>
+                                <option value="深度分析">深度分析</option>
+                                <option value="轻松随笔">轻松随笔</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="ai-length">文章长度</label>
+                            <select id="ai-length">
+                                <option value="short">短文 (800-1200字)</option>
+                                <option value="medium" selected>中等 (1500-2500字)</option>
+                                <option value="long">长文 (3000-5000字)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="ai-platform">目标平台</label>
+                            <select id="ai-platform">
+                                <option value="通用">通用</option>
+                                <option value="知乎">知乎</option>
+                                <option value="掘金">掘金</option>
+                                <option value="CSDN">CSDN</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button id="ai-generate-btn" class="btn btn-primary">✨ AI生成文章</button>
+                </div>
+                <div id="ai-result" class="ai-result" style="display: none;">
+                    <div class="suggested-tags"></div>
+                    <div class="content-preview"></div>
+                    <button id="use-content-btn" class="btn btn-success">使用此内容</button>
+                </div>
+            </div>
+        </section>
+        {% endif %}
+
+        <!-- 文章编辑器 -->
+        <section class="section">
+            <h2>📝 文章编辑</h2>
+            <div class="editor-form">
+                <div class="form-group">
+                    <label for="article-title">文章标题</label>
+                    <input type="text" id="article-title" placeholder="输入文章标题">
+                </div>
+                <div class="form-group">
+                    <label for="article-tags">标签 (用逗号分隔)</label>
+                    <input type="text" id="article-tags" placeholder="Python, AI, 编程">
+                </div>
+                <div class="form-group">
+                    <label for="article-content">文章内容 (Markdown)</label>
+                    <textarea id="article-content" rows="15" placeholder="在此输入文章内容，或使用AI生成..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>发布平台</label>
+                    <div class="platform-checkboxes">
+                        {% for platform in platforms %}
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="platform" value="{{ platform.name }}" 
+                                   {{ 'checked' if platform.authenticated else 'disabled' }}>
+                            {{ platform.display_name }}
+                            {{ '✓' if platform.authenticated else '(需先授权)' }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button id="format-btn" class="btn btn-secondary">🎨 格式化</button>
+                    <button id="publish-btn" class="btn btn-primary btn-large">🚀 一键发布</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 发布结果 -->
+        <section class="section" id="result-section" style="display: none;">
+            <h2>📊 发布结果</h2>
+            <div id="publish-results" class="results-grid"></div>
+        </section>
+
+        <!-- 页脚 -->
+        <footer class="footer">
+            <p>ContentPilot - 开源多平台内容发布工具</p>
+            <p>Star us on <a href="https://github.com/chen524410495/content-pilot">GitHub</a></p>
+        </footer>
+    </div>
+
+    <script>
+        // AI写作
+        document.getElementById('ai-generate-btn')?.addEventListener('click', async () => {
+            const topic = document.getElementById('ai-topic').value;
+            const style = document.getElementById('ai-style').value;
+            const length = document.getElementById('ai-length').value;
+            const platform = document.getElementById('ai-platform').value;
+            const btn = document.getElementById('ai-generate-btn');
+            const resultDiv = document.getElementById('ai-result');
+
+            if (!topic) {
+                alert('请输入文章主题');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'AI写作中...';
+
+            try {
+                const response = await fetch('/api/ai-write', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ topic, style, length, platform })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // 显示生成结果
+                    document.getElementById('article-title').value = data.titles.split('\n')[0] || '';
+                    document.getElementById('article-content').value = data.content;
+                    
+                    // 显示标签建议
+                    const tagsDiv = resultDiv.querySelector('.suggested-tags');
+                    tagsDiv.innerHTML = '<strong>推荐标签:</strong> ' + 
+                        data.tags.map(t => `<span class="tag">${t}</span>`).join(' ');
+
+                    // 显示内容预览
+                    const previewDiv = resultDiv.querySelector('.content-preview');
+                    previewDiv.innerHTML = `<p><strong>阅读时间:</strong> 约${data.read_time}分钟</p>` +
+                        `<p><strong>字数统计:</strong> ${data.content.length} 字符</p>` +
+                        `<details><summary>预览内容</summary><pre>${data.content.substring(0, 500)}...</pre></details>`;
+
+                    // 更新标签输入
+                    document.getElementById('article-tags').value = data.tags.join(', ');
+
+                    resultDiv.style.display = 'block';
+                } else {
+                    alert('AI写作失败: ' + data.error);
+                }
+            } catch (e) {
+                alert('请求失败: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '✨ AI生成文章';
+            }
+        });
+
+        // 使用AI生成的内容
+        document.getElementById('use-content-btn')?.addEventListener('click', () => {
+            const content = document.getElementById('article-content').value;
+            const title = document.getElementById('article-title').value;
+            alert(`已使用！\n标题: ${title}\n内容长度: ${content.length}字符`);
+        });
+
+        // 发布文章
+        document.getElementById('publish-btn')?.addEventListener('click', async () => {
+            const title = document.getElementById('article-title').value;
+            const content = document.getElementById('article-content').value;
+            const tags = document.getElementById('article-tags').value.split(',').map(t => t.trim()).filter(t => t);
+            
+            const platforms = Array.from(document.querySelectorAll('input[name="platform"]:checked'))
+                .map(cb => cb.value);
+
+            if (!title || !content) {
+                alert('请填写标题和内容');
+                return;
+            }
+
+            if (platforms.length === 0) {
+                alert('请选择至少一个平台');
+                return;
+            }
+
+            const btn = document.getElementById('publish-btn');
+            btn.disabled = true;
+            btn.textContent = '发布中...';
+
+            try {
+                const response = await fetch('/api/publish', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, content, tags, platforms })
+                });
+
+                const data = await response.json();
+
+                // 显示结果
+                const resultSection = document.getElementById('result-section');
+                const resultsDiv = document.getElementById('publish-results');
+                resultSection.style.display = 'block';
+
+                resultsDiv.innerHTML = data.results.map(r => `
+                    <div class="result-card ${r.success ? 'success' : 'error'}">
+                        <h4>${r.platform}</h4>
+                        ${r.success ? 
+                            `<p>✅ 成功</p><a href="${r.url}" target="_blank">查看文章</a>` :
+                            `<p>❌ 失败: ${r.error}</p>`
+                        }
+                    </div>
+                `).join('');
+
+                // 滚动到结果
+                resultSection.scrollIntoView({ behavior: 'smooth' });
+
+            } catch (e) {
+                alert('发布失败: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚀 一键发布';
+            }
+        });
+
+        // 格式化内容
+        document.getElementById('format-btn')?.addEventListener('click', async () => {
+            const content = document.getElementById('article-content').value;
+            if (!content) {
+                alert('请先输入内容');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/format', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content, platform: '通用' })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('article-content').value = data.content;
+                    alert(`格式化完成！阅读时间约${data.read_time}分钟`);
+                }
+            } catch (e) {
+                alert('格式化失败: ' + e.message);
+            }
+        });
+    </script>
+</body>
+</html>
