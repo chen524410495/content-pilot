@@ -1,0 +1,33 @@
+# ContentPilot 配置文件
+
+# 知乎 API 配置
+# 申请地址: https://link.zhihu.com/?target=https%3A//www.zhihu.com/apps
+zhihu:
+  client_id: "your_zhihu_client_id"
+  client_secret: "your_zhihu_client_secret"
+  access_token: ""  # 登录后获取，留空会自动引导获取
+
+# 掘金 API 配置
+# 申请地址: https://juejin.cn/extensions
+juejin:
+  client_id: "your_juejin_client_id"
+  client_secret: "your_juejin_client_secret"
+  access_token: ""
+
+# CSDN API 配置
+# CSDN无需申请，直接使用用户名密码
+csdn:
+  username: "your_csdn_username"
+  password: "your_csdn_password"
+
+# Claude AI 配置
+# 获取API Key: https://console.anthropic.com/
+claude:
+  api_key: "your_claude_api_key"
+
+# 服务器配置
+server:
+  host: "0.0.0.0"
+  port: 5000
+  debug: true
+  secret_key: "change-this-to-a-random-string"
